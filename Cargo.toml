@@ -1,0 +1,15 @@
+[package]
+name = "exponential_backoff"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tokio = "1.24.2"
+reqwest = "0.11.14"
+chrono = "0.4.23"
+google-youtube3 = "4.0"
+mime = "0.2.6"
+serde_json = "1.0.91"
+rand = "0.8.5"
