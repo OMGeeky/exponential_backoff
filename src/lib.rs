@@ -1,4 +1,3 @@
-#![feature(async_closure)]
 use rand::Rng;
 
 const EXTRA_BUFFER_TIME: u64 = 100;
@@ -9,20 +8,29 @@ pub enum Api {
     Bigquery,
 }
 
-pub mod errors;
-pub mod youtube;
-pub mod twitch;
 pub mod bigquery;
+pub mod errors;
+pub mod twitch;
+pub mod youtube;
 
-
+/// Sleeps for the given backoff time, plus some extra buffer time, plus some random extra time.
+/// backoff_time is in seconds.
+/// with_extra_buffer_time is a bool that determines whether or not to add the extra buffer time.
 async fn sleep_for_backoff_time(backoff_time: u64, with_extra_buffer_time: bool) {
     let extra_buffer_time = match with_extra_buffer_time {
         true => EXTRA_BUFFER_TIME,
-        false => 0
+        false => 0,
     };
-    let backoff_time = backoff_time * 1000 as u64;
 
-    // let random_extra = rand::thread_rng().gen_range(0..100);
+    //convert to milliseconds
+    let backoff_time = backoff_time * 1000;
+
+    //add some random extra time for good measure (in milliseconds)
     let random_extra = rand::thread_rng().gen_range(0..100);
-    tokio::time::sleep(std::time::Duration::from_millis(backoff_time + extra_buffer_time + random_extra)).await;
+    let total_millis = backoff_time + extra_buffer_time + random_extra;
+    println!(
+        "sleep_for_backoff_time->Sleeping for {} milliseconds",
+        total_millis
+    );
+    tokio::time::sleep(std::time::Duration::from_millis(total_millis)).await;
 }

@@ -9,38 +9,35 @@ use google_youtube3::hyper::client::HttpConnector;
 use google_youtube3::hyper_rustls::HttpsConnector;
 use google_youtube3::YouTube;
 
+use crate::sleep_for_backoff_time;
+
+/// the base number for the backoff
+///
+/// gets used as base^n where n is the amount of backoffs
 const YOUTUBE_DEFAULT_BACKOFF_TIME_S: u64 = 2;
+/// the max amount a single backoff can be
 const YOUTUBE_MAX_BACKOFF_TIME_S: u64 = 3600;
+/// the max amount of backoffs that can be done
+///
+/// after this amount of backoffs, the method will return Err()
+const YOUTUBE_MAX_TRIES: u64 = 50;//should result in ~39 hours of maximum backoff time
 
-struct UploadParameters {
-    video: Video,
-    path: PathBuf,
-    mime_type: mime::Mime
-}
 
-//TODO: implement backoff for other youtube calls
-
-async fn generic_check_backoff_youtube<
+pub async fn generic_check_backoff_youtube<'a, 'b, 'c,
     T,
-    // Fut: Future<Output=Result<google_youtube3::Result<(Response<Body>, T)>, Box<dyn Error>>> ,
+    Para,
     Fut: Future<Output=Result<(Response<Body>, T), google_youtube3::Error>>,
-    Para>
+>
 (
-    client: &YouTube<HttpsConnector<HttpConnector>>,
-    para: &Para,
-    function: impl Fn(&YouTube<HttpsConnector<HttpConnector>>, &Para) -> Fut
+    client: &'a YouTube<HttpsConnector<HttpConnector>>,
+    para: &'b Para,
+    function: impl Fn(&'a YouTube<HttpsConnector<HttpConnector>>, &'b Para) -> Fut
 )
     -> Result<google_youtube3::Result<(Response<Body>, T)>, Box<dyn Error>>
-// where Fut: Future<Output=google_youtube3::Result<(Response<Body>, T)>>
 {
     let mut backoff = 0;
     let mut res: google_youtube3::Result<(Response<Body>, T)>;
     'try_upload: loop {
-        // let stream = tokio::fs::File::open(&path).await?;
-        // let stream = stream.into_std().await;
-        // println!("Uploading video ({}): {:?}", backoff, path.as_ref().to_str());
-        //
-        // res = client.videos().insert(video.clone()).upload(stream, mime_type.clone()).await;
         res = function(&client, para).await;
         match res {
             Ok(_) => break 'try_upload,
@@ -48,17 +45,13 @@ async fn generic_check_backoff_youtube<
                 println!("Error: {}", e);
                 if let BadRequest(e1) = &e {
                     let is_quota_error = get_is_quota_error(&e1);
-                    backoff += 1;
 
-                    println!("is_quota_error: {}", is_quota_error);
                     if is_quota_error {
-                        let backoff_time = YOUTUBE_DEFAULT_BACKOFF_TIME_S.pow(backoff);
-                        println!("backoff_time: {}", backoff_time);
-                        if backoff_time > YOUTUBE_MAX_BACKOFF_TIME_S {
+                        println!("quota_error: {}", e);
+                        backoff += 1;
+                        if !wait_for_backoff(backoff).await {
                             return Err(e.into());
                         }
-                        //TODO: test this backoff
-                        tokio::time::sleep(std::time::Duration::from_millis(backoff_time * 1000)).await;
                     } else {
                         return Err(e.into());
                     }
@@ -73,68 +66,50 @@ async fn generic_check_backoff_youtube<
     Ok(res)
 }
 
-pub async fn check_backoff_youtube_upload(client: &YouTube<HttpsConnector<HttpConnector>>,
-                                          video: Video,
-                                          path: impl AsRef<Path>,
-                                          mime_type: mime::Mime)
-                                          -> Result<google_youtube3::Result<(Response<Body>, Video)>, Box<dyn Error>>
-{
-    let params = UploadParameters {
-        video: video.clone(),
-        path: path.as_ref().into(),
-        mime_type: mime_type.clone()
-    };
-
-    async fn function(client: &YouTube<HttpsConnector<HttpConnector>>, para: &UploadParameters)
-                      -> Result<(Response<Body>, Video), google_youtube3::Error> {
-        // let para = para.get_parameters();
-        // let stream = tokio::fs::File::open(&para.path).await?;
-        // let stream = stream.into_std().await;
-        let stream = std::fs::File::open(&para.path)?;
-        // println!("Uploading video ({}): {:?}", backoff, path.as_ref().to_str());
-        client.videos().insert(para.video.clone()).upload(stream, para.mime_type.clone()).await
+async fn wait_for_backoff<'a>(backoff: u32) -> bool {
+    let mut backoff_time = YOUTUBE_DEFAULT_BACKOFF_TIME_S.pow(backoff);
+    println!("backoff_time: {}", backoff_time);
+    if backoff as u64 > YOUTUBE_MAX_TRIES {
+        return false;
     }
-    let res = generic_check_backoff_youtube(client, &params, function).await??;
-
-
-    // let mut backoff = 0;
-    // let mut res: google_youtube3::Result<(Response<Body>, Video)>;
-    // 'try_upload: loop {
-    //     let stream = tokio::fs::File::open(&path).await?;
-    //     let stream = stream.into_std().await;
-    //     println!("Uploading video ({}): {:?}", backoff, path.as_ref().to_str());
-    //     res = client.videos().insert(video.clone()).upload(stream, mime_type.clone()).await;
-    //     match res {
-    //         Ok(_) => break 'try_upload,
-    //         Err(e) => {
-    //             println!("Error: {}", e);
-    //             if let BadRequest(e1) = &e {
-    //                 let is_quota_error = get_is_quota_error(&e1);
-    //                 backoff += 1;
-    //
-    //                 println!("is_quota_error: {}", is_quota_error);
-    //                 if is_quota_error {
-    //                     let backoff_time = YOUTUBE_DEFAULT_BACKOFF_TIME_S.pow(backoff);
-    //                     println!("backoff_time: {}", backoff_time);
-    //                     if backoff_time > YOUTUBE_MAX_BACKOFF_TIME_S {
-    //                         return Err(e.into());
-    //                     }
-    //                     //TODO: test this backoff
-    //                     tokio::time::sleep(std::time::Duration::from_millis(backoff_time * 1000)).await;
-    //                 } else {
-    //                     return Err(e.into());
-    //                 }
-    //             } else {
-    //                 return Err(e.into());
-    //             }
-    //         }
-    //     }
-    // }
-    //
-
-    let res: google_youtube3::Result<(Response<Body>, Video)> = Ok(res);
-    Ok(res)
+    if backoff_time > YOUTUBE_MAX_BACKOFF_TIME_S {
+        backoff_time = YOUTUBE_MAX_BACKOFF_TIME_S;
+    }
+    sleep_for_backoff_time(backoff_time, false).await;
+    true
 }
+
+// 
+// pub async fn check_backoff_youtube_upload(client: &YouTube<HttpsConnector<HttpConnector>>,
+//                                           video: Video,
+//                                           path: impl AsRef<Path>,
+//                                           mime_type: mime::Mime)
+//                                           -> Result<google_youtube3::Result<(Response<Body>, Video)>, Box<dyn Error>>
+// {
+//     struct UploadParameters {
+//         video: Video,
+//         path: PathBuf,
+//         mime_type: mime::Mime
+//     }
+//
+//     let params = UploadParameters {
+//         video: video.clone(),
+//         path: path.as_ref().into(),
+//         mime_type: mime_type.clone()
+//     };
+//
+//     async fn function(client: &YouTube<HttpsConnector<HttpConnector>>, para: &UploadParameters)
+//                       -> Result<(Response<Body>, Video), google_youtube3::Error> {
+//         let stream = tokio::fs::File::open(&para.path).await?;
+//         let stream = stream.into_std().await;
+//         client.videos().insert(para.video.clone()).upload(stream, para.mime_type.clone()).await
+//     }
+//     let res = generic_check_backoff_youtube::<Video, UploadParameters, _>
+//         (client, &params, function).await??;
+//
+//     let res: google_youtube3::Result<(Response<Body>, Video)> = Ok(res);
+//     Ok(res)
+// }
 
 fn get_is_quota_error(e: &serde_json::value::Value) -> bool {
     let is_quota_error = e.get("error")
@@ -144,6 +119,8 @@ fn get_is_quota_error(e: &serde_json::value::Value) -> bool {
         .and_then(|e| e.as_str())
         .and_then(|e|
             if e == "quotaExceeded" {
+                Some(())
+            } else if e == "uploadLimitExceeded" {
                 Some(())
             } else {
                 None
