@@ -1,10 +1,9 @@
 use std::error::Error;
 
 use chrono::NaiveDateTime;
+use log::{debug, error, info, trace, warn};
 use reqwest::{Body, Client, IntoUrl, Request, Response};
 use reqwest::header::HeaderMap;
-
-use log::{info, trace};
 
 use crate::errors::BackoffError;
 use crate::sleep_for_backoff_time;
@@ -82,12 +81,25 @@ pub async fn check_backoff_twitch_with_client(
         // Some(v) => Ok(v),
         // None => Err("Request is None".into()),
         // }?;
-        let response = client.execute(r).await?;
+        let response = client.execute(r).await;
+        let response = match response {
+            Ok(v) => v,
+            Err(e) => {
+                debug!("Error from client.execute ({}): {}", counter, e);
+                if counter > 5 {
+                    error!("Error from client.execute ({}): {}", counter, e);
+                    return Err(e.into());
+                }
+                sleep_for_backoff_time(counter * 5, true).await;
+                continue;
+            }
+        };
 
         let status_code = response.status();
         match status_code.as_u16() {
             200 => return Ok(response),
             429 => {
+                trace!("429 (rate limit exceeded) received");
                 let x = &request
                     .headers()
                     .get("Ratelimit-Reset")
@@ -96,8 +108,11 @@ pub async fn check_backoff_twitch_with_client(
                 handle_e429(value).await?;
             }
 
-            _ => return Ok(response),
-            // _ => todo!("Handle other errors or "),
+            _ => {
+                warn!("Unhandled status code: {}", status_code);
+                // todo!("Handle other errors")
+                return Ok(response);
+            }
         }
 
         counter += 1;
