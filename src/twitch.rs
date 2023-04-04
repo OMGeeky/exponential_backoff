@@ -1,15 +1,14 @@
 use std::error::Error;
 
 use chrono::NaiveDateTime;
-use reqwest::header::{HeaderMap, HeaderValue};
-use reqwest::{Body, Client, IntoUrl, Request, RequestBuilder, Response};
+use reqwest::{Body, Client, IntoUrl, Request, Response};
+use reqwest::header::HeaderMap;
+
+use log::{info, trace};
 
 use crate::errors::BackoffError;
 use crate::sleep_for_backoff_time;
 
-enum ErrorTypes {
-    E429(String),
-}
 //region reqwest
 //region convenience functions
 
@@ -46,7 +45,9 @@ pub async fn check_backoff_twitch_post_with_client<T: IntoUrl, B: Into<Body>>(
     body: Option<B>,
     client: &Client,
 ) -> Result<Response, Box<dyn Error>> {
-    let mut request = client.post(url.into_url()?);
+    let url = url.into_url()?;
+    trace!("check_backoff_twitch_post_with_client {:?}", url);
+    let mut request = client.post(url);
 
     if let Some(headers) = headers {
         request = request.headers(headers);
@@ -71,7 +72,10 @@ pub async fn check_backoff_twitch_with_client(
     request: Request,
     client: &Client,
 ) -> Result<Response, Box<dyn Error>> {
+    trace!("check_backoff_twitch_with_client {:?}", request);
+    let mut counter = 0;
     loop {
+        trace!("check_backoff_twitch_with_client loop ({})", counter);
         let r: Request = request
             .try_clone()
             .ok_or::<BackoffError>("Request is None".into())?;
@@ -95,10 +99,13 @@ pub async fn check_backoff_twitch_with_client(
             _ => return Ok(response),
             // _ => todo!("Handle other errors or "),
         }
+
+        counter += 1;
     }
 }
 
 async fn handle_e429(value: String) -> Result<(), Box<dyn Error>> {
+    trace!("handle_e429 {}", value);
     let value = value.parse::<i64>()?;
     let timestamp = NaiveDateTime::from_timestamp_opt(value, 0).ok_or(BackoffError::new(
         format!("Could not convert the provided timestamp: {}", value),
@@ -110,7 +117,7 @@ async fn handle_e429(value: String) -> Result<(), Box<dyn Error>> {
     }
     let duration = timestamp - now;
     let duration = duration.num_seconds() as u64;
-    println!("Sleeping for {} seconds", duration);
+    info!("Sleeping for {} seconds", duration);
     sleep_for_backoff_time(duration, true).await;
     //TODO: test this somehow
     Ok(())

@@ -1,5 +1,7 @@
 use rand::Rng;
 
+use log::{trace, info};
+
 const EXTRA_BUFFER_TIME: u64 = 100;
 
 pub enum Api {
@@ -21,6 +23,11 @@ async fn sleep_for_backoff_time(backoff_time: u64, with_extra_buffer_time: bool)
         true => EXTRA_BUFFER_TIME,
         false => 0,
     };
+    trace!(
+        "sleep_for_backoff_time->backoff_time: {}, extra_buffer_time: {}",
+        backoff_time,
+        extra_buffer_time
+    );
 
     //convert to milliseconds
     let backoff_time = backoff_time * 1000;
@@ -28,7 +35,7 @@ async fn sleep_for_backoff_time(backoff_time: u64, with_extra_buffer_time: bool)
     //add some random extra time for good measure (in milliseconds)
     let random_extra = rand::thread_rng().gen_range(0..100);
     let total_millis = backoff_time + extra_buffer_time + random_extra;
-    println!(
+    info!(
         "sleep_for_backoff_time->Sleeping for {} milliseconds",
         total_millis
     );

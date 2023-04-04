@@ -1,5 +1,7 @@
 use std::fmt;
 
+use log::warn;
+
 #[derive(Debug, Clone)]
 pub struct BackoffError {
     message: String,
@@ -8,6 +10,7 @@ pub struct BackoffError {
 impl BackoffError {
     pub fn new<S: Into<String>>(message: S) -> BackoffError {
         let message = message.into();
+        warn!("BackoffError: {}", message);
         BackoffError { message }
     }
 }

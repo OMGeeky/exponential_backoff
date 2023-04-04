@@ -1,8 +1,8 @@
 use std::error::Error;
 use std::future::Future;
-use std::path::{Path, PathBuf};
 
-use google_youtube3::api::Video;
+use log::{warn, info, trace};
+
 use google_youtube3::Error::BadRequest;
 use google_youtube3::hyper::{Body, Response};
 use google_youtube3::hyper::client::HttpConnector;
@@ -31,23 +31,25 @@ pub async fn generic_check_backoff_youtube<'a, 'b, 'c,
 (
     client: &'a YouTube<HttpsConnector<HttpConnector>>,
     para: &'b Para,
-    function: impl Fn(&'a YouTube<HttpsConnector<HttpConnector>>, &'b Para) -> Fut
+    function: impl Fn(&'a YouTube<HttpsConnector<HttpConnector>>, &'b Para) -> Fut,
 )
     -> Result<google_youtube3::Result<(Response<Body>, T)>, Box<dyn Error>>
 {
+    trace!("generic_check_backoff_youtube");
     let mut backoff = 0;
     let mut res: google_youtube3::Result<(Response<Body>, T)>;
     'try_upload: loop {
+        trace!("generic_check_backoff_youtube loop ({})", backoff);
         res = function(&client, para).await;
         match res {
             Ok(_) => break 'try_upload,
             Err(e) => {
-                println!("Error: {}", e);
+                warn!("Error: {}", e);
                 if let BadRequest(e1) = &e {
                     let is_quota_error = get_is_quota_error(&e1);
 
                     if is_quota_error {
-                        println!("quota_error: {}", e);
+                        info!("quota_error: {}", e);
                         backoff += 1;
                         if !wait_for_backoff(backoff).await {
                             return Err(e.into());
@@ -67,8 +69,9 @@ pub async fn generic_check_backoff_youtube<'a, 'b, 'c,
 }
 
 async fn wait_for_backoff<'a>(backoff: u32) -> bool {
+    trace!("wait_for_backoff ({})", backoff);
     let mut backoff_time = YOUTUBE_DEFAULT_BACKOFF_TIME_S.pow(backoff);
-    println!("backoff_time: {}", backoff_time);
+    info!("backoff_time: {}", backoff_time);
     if backoff as u64 > YOUTUBE_MAX_TRIES {
         return false;
     }
@@ -112,6 +115,7 @@ async fn wait_for_backoff<'a>(backoff: u32) -> bool {
 // }
 
 fn get_is_quota_error(e: &serde_json::value::Value) -> bool {
+    trace!("get_is_quota_error");
     let is_quota_error = e.get("error")
         .and_then(|e| e.get("errors"))
         .and_then(|e| e.get(0))
