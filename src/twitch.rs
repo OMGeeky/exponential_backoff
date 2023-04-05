@@ -126,13 +126,14 @@ async fn handle_e429(value: String) -> Result<(), Box<dyn Error>> {
         format!("Could not convert the provided timestamp: {}", value),
     ))?;
     let now = chrono::Local::now().naive_local();
+    info!("Twitch Exponential Backoff: Got a Rate Limit Exceeded (429) response from Twitch. Sleeping until {} (now: {})", timestamp, now);
     if timestamp < now {
+        info!("Sleeping for 1 second (timestamp < now)");
         sleep_for_backoff_time(1, true).await;
         return Ok(());
     }
     let duration = timestamp - now;
     let duration = duration.num_seconds() as u64;
-    info!("Sleeping for {} seconds", duration);
     sleep_for_backoff_time(duration, true).await;
     //TODO: test this somehow
     Ok(())
