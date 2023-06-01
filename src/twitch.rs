@@ -74,6 +74,7 @@ pub async fn check_backoff_twitch_with_client(
     trace!("check_backoff_twitch_with_client {:?}", request);
     let mut counter = 0;
     loop {
+        counter += 1;
         trace!("check_backoff_twitch_with_client loop ({})", counter);
         let r: Request = request
             .try_clone()
@@ -106,6 +107,7 @@ pub async fn check_backoff_twitch_with_client(
                     .ok_or(BackoffError::new("No rate limit reset given"))?;
                 let value: String = x.to_str()?.to_string();
                 handle_e429(value).await?;
+                continue;
             }
 
             _ => {
@@ -114,8 +116,6 @@ pub async fn check_backoff_twitch_with_client(
                 return Ok(response);
             }
         }
-
-        counter += 1;
     }
 }
 
