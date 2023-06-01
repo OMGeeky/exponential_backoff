@@ -2,8 +2,8 @@ use std::error::Error;
 
 use crate::prelude::*;
 use chrono::NaiveDateTime;
-use reqwest::{Body, Client, IntoUrl, Request, Response};
 use reqwest::header::HeaderMap;
+use reqwest::{Body, Client, IntoUrl, Request, Response};
 
 use crate::errors::BackoffError;
 use crate::sleep_for_backoff_time;

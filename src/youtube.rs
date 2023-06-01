@@ -3,10 +3,10 @@ use std::future::Future;
 
 use crate::prelude::*;
 
-use google_youtube3::Error::BadRequest;
-use google_youtube3::hyper::{Body, Response};
 use google_youtube3::hyper::client::HttpConnector;
+use google_youtube3::hyper::{Body, Response};
 use google_youtube3::hyper_rustls::HttpsConnector;
+use google_youtube3::Error::BadRequest;
 use google_youtube3::YouTube;
 
 use crate::sleep_for_backoff_time;
@@ -20,21 +20,20 @@ const YOUTUBE_MAX_BACKOFF_TIME_S: u64 = 3600;
 /// the max amount of backoffs that can be done
 ///
 /// after this amount of backoffs, the method will return Err()
-const YOUTUBE_MAX_TRIES: u64 = 50;//should result in ~39 hours of maximum backoff time
+const YOUTUBE_MAX_TRIES: u64 = 50; //should result in ~39 hours of maximum backoff time
 
-
-pub async fn generic_check_backoff_youtube<'a, 'b, 'c,
+pub async fn generic_check_backoff_youtube<
+    'a,
+    'b,
+    'c,
     T,
     Para,
-    Fut: Future<Output=Result<(Response<Body>, T), google_youtube3::Error>>,
->
-(
+    Fut: Future<Output = Result<(Response<Body>, T), google_youtube3::Error>>,
+>(
     client: &'a YouTube<HttpsConnector<HttpConnector>>,
     para: &'b Para,
     function: impl Fn(&'a YouTube<HttpsConnector<HttpConnector>>, &'b Para) -> Fut,
-)
-    -> Result<google_youtube3::Result<(Response<Body>, T)>, Box<dyn Error>>
-{
+) -> Result<google_youtube3::Result<(Response<Body>, T)>, Box<dyn Error>> {
     trace!("generic_check_backoff_youtube");
     let mut backoff = 0;
     let mut res: google_youtube3::Result<(Response<Body>, T)>;
@@ -82,7 +81,7 @@ async fn wait_for_backoff<'a>(backoff: u32) -> bool {
     true
 }
 
-// 
+//
 // pub async fn check_backoff_youtube_upload(client: &YouTube<HttpsConnector<HttpConnector>>,
 //                                           video: Video,
 //                                           path: impl AsRef<Path>,
@@ -116,12 +115,13 @@ async fn wait_for_backoff<'a>(backoff: u32) -> bool {
 
 fn get_is_quota_error(e: &serde_json::value::Value) -> bool {
     trace!("get_is_quota_error");
-    let is_quota_error = e.get("error")
+    let is_quota_error = e
+        .get("error")
         .and_then(|e| e.get("errors"))
         .and_then(|e| e.get(0))
         .and_then(|e| e.get("reason"))
         .and_then(|e| e.as_str())
-        .and_then(|e|
+        .and_then(|e| {
             if e == "quotaExceeded" {
                 Some(())
             } else if e == "uploadLimitExceeded" {
@@ -129,6 +129,7 @@ fn get_is_quota_error(e: &serde_json::value::Value) -> bool {
             } else {
                 None
             }
-        ).is_some();
+        })
+        .is_some();
     is_quota_error
 }

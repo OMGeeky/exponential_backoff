@@ -15,7 +15,6 @@ impl BackoffError {
     }
 }
 
-
 // Generation of an error is completely separate from how it is displayed.
 // There's no need to be concerned about cluttering complex logic with the display style.
 //
@@ -39,5 +38,4 @@ impl std::error::Error for BackoffError {
     fn description(&self) -> &str {
         self.message.as_str()
     }
-
 }
