@@ -113,7 +113,7 @@ pub async fn check_backoff_twitch_with_client(
             _ => {
                 warn!("Unhandled status code: {}", status_code);
                 // todo!("Handle other errors")
-                return Ok(response);
+                return Err(format!("got an unhandled status code: {} in response: {:?}" , status_code, response).into());
             }
         }
     }
