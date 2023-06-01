@@ -1,7 +1,7 @@
 use std::error::Error;
 
+use crate::prelude::*;
 use chrono::NaiveDateTime;
-use log::{debug, error, info, trace, warn};
 use reqwest::{Body, Client, IntoUrl, Request, Response};
 use reqwest::header::HeaderMap;
 

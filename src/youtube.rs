@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::future::Future;
 
-use log::{warn, info, trace};
+use crate::prelude::*;
 
 use google_youtube3::Error::BadRequest;
 use google_youtube3::hyper::{Body, Response};

@@ -1,6 +1,6 @@
 use std::fmt;
 
-use log::warn;
+use crate::prelude::*;
 
 #[derive(Debug, Clone)]
 pub struct BackoffError {
